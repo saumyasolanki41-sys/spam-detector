@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mail Desk: spot spam and phishing</title>
+<style>
+:root{
+  --bg:#e9ecf3; --panel:#ffffff; --ink:#1b2033; --muted:#5d6580; --line:#d3d8e6; --sel:#e4e8ff;
+  --bad:#c0262d; --bad-bg:#fde3e4; --warn:#a85a00; --warn-bg:#ffecd2; --good:#12724f; --good-bg:#d7f2e5; --brand:#3b46c9;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#10131f; --panel:#1a1f31; --ink:#e6e9f5; --muted:#a0a8c4; --line:#2e3552; --sel:#262d52;
+    --bad:#ff8087; --bad-bg:#4a2125; --warn:#ffb867; --warn-bg:#4a3318; --good:#5fdba9; --good-bg:#17402f; --brand:#a3acff; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#10131f; --panel:#1a1f31; --ink:#e6e9f5; --muted:#a0a8c4; --line:#2e3552; --sel:#262d52;
+  --bad:#ff8087; --bad-bg:#4a2125; --warn:#ffb867; --warn-bg:#4a3318; --good:#5fdba9; --good-bg:#17402f; --brand:#a3acff; color-scheme:dark;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.5}
+header{max-width:1100px;margin:0 auto;padding:28px 20px 8px}
+h1{margin:0;font-size:clamp(1.7rem,5vw,2.4rem);font-weight:800;letter-spacing:-.02em}
+header p{margin:6px 0 0;color:var(--muted);max-width:62ch}
+.privacy{margin:0;color:var(--muted);font-size:.82rem}
+.desk{max-width:1100px;margin:16px auto 56px;padding:0 20px;display:grid;grid-template-columns:280px 1fr;gap:16px;align-items:start}
+@media (max-width:820px){.desk{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1.5px solid var(--line);border-radius:12px;overflow:hidden}
+.panel h2{margin:0;padding:12px 16px;font-size:.95rem;border-bottom:1.5px solid var(--line)}
+#inbox{list-style:none;margin:0;padding:0}
+#inbox li button{all:unset;box-sizing:border-box;display:flex;gap:10px;width:100%;padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--line)}
+#inbox li:last-child button{border-bottom:0}
+#inbox li button:hover{background:var(--sel)}
+#inbox li button[aria-current="true"]{background:var(--sel)}
+#inbox li button:focus-visible{outline:3px solid var(--brand);outline-offset:-3px}
+.dot{flex:none;width:10px;height:10px;border-radius:50%;margin-top:7px}
+.dot.bad{background:var(--bad)} .dot.warn{background:var(--warn)} .dot.good{background:var(--good)}
+.meta b{display:block;font-size:.92rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px}
+.meta span{display:block;font-size:.82rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px}
+.new{padding:12px 16px;border-top:1.5px solid var(--line)}
+.new button,.new-btn{font:inherit;font-weight:600;color:var(--brand);background:none;border:1.5px solid var(--brand);border-radius:8px;padding:7px 12px;cursor:pointer}
+.stack{display:grid;gap:16px}
+.compose{padding:16px;display:grid;gap:10px}
+.compose label{font-size:.82rem;font-weight:600;color:var(--muted);display:block;margin-bottom:3px}
+.compose input,.compose textarea{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1.5px solid var(--line);border-radius:8px;padding:9px 11px}
+.compose textarea{min-height:150px;resize:vertical}
+.compose input:focus-visible,.compose textarea:focus-visible{outline:3px solid var(--brand);outline-offset:1px}
+.report{padding:16px 16px 8px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.stamp{font-weight:800;font-size:1.35rem;border:3px solid currentColor;border-radius:8px;padding:2px 12px;transform:rotate(-2.5deg);display:inline-block}
+.stamp.bad{color:var(--bad)} .stamp.warn{color:var(--warn)} .stamp.good{color:var(--good)}
+.score{font-weight:800;font-size:1.6rem}
+.score small{font-size:.85rem;font-weight:400;color:var(--muted)}
+.summary{margin:8px 0 0;color:var(--muted);font-size:.9rem;max-width:60ch}
+.gauge{position:relative;height:12px;border-radius:6px;margin:14px 0 6px;background:linear-gradient(90deg,var(--good-bg) 0 25%,var(--warn-bg) 25% 55%,var(--bad-bg) 55% 100%)}
+.gauge i{position:absolute;top:-4px;width:6px;height:20px;border-radius:3px;background:var(--ink);transform:translateX(-3px);transition:left .25s ease}
+.scale{display:flex;font-size:.78rem;color:var(--muted);margin-bottom:12px}
+.scale span:nth-child(1){width:25%} .scale span:nth-child(2){width:30%} .scale span:nth-child(3){flex:1}
+.rules{list-style:none;margin:0;padding:0}
+.rules li{padding:12px 16px;border-top:1px solid var(--line);display:grid;grid-template-columns:auto 1fr;gap:4px 12px}
+.pts{font-weight:800;border-radius:6px;padding:0 8px;height:fit-content;font-size:.9rem}
+.pts.bad{background:var(--bad-bg);color:var(--bad)} .pts.good{background:var(--good-bg);color:var(--good)}
+.rules b{font-size:.95rem}
+.rules p{grid-column:2;margin:0;font-size:.88rem;color:var(--muted)}
+.rules code{grid-column:2;font-family:ui-monospace,"DM Mono",Menlo,Consolas,monospace;font-size:.82rem;background:var(--bg);padding:3px 7px;border-radius:5px;overflow-wrap:anywhere;width:fit-content;max-width:100%}
+.clean{padding:14px 16px;border-top:1px solid var(--line);color:var(--muted);font-size:.9rem}
+</style>
+</head>
+<body>
+<header>
+  <h1>Mail Desk</h1>
+  <p>Open a sample message or paste an email. Mail Desk checks common scam signals and explains every match.</p>
+</header>
+
+<div class="desk">
+  <nav class="panel" aria-label="Inbox">
+    <h2>Inbox</h2>
+    <ul id="inbox"></ul>
+    <div class="new"><button type="button" id="blank">Check your own email</button></div>
+  </nav>
+
+  <div class="stack">
+    <section class="panel">
+      <h2>Message</h2>
+      <div class="compose">
+        <div><label for="from">From</label><input id="from" autocomplete="off"></div>
+        <div><label for="subj">Subject</label><input id="subj" autocomplete="off"></div>
+        <div><label for="body">Body</label><textarea id="body"></textarea></div>
+        <p class="privacy">Analysis runs only in this browser. Do not paste passwords or other secrets.</p>
+      </div>
+    </section>
+    <section class="panel" aria-live="polite" aria-atomic="true">
+      <div class="report">
+        <div class="top"><span class="stamp" id="stamp"></span><span class="score" id="score"></span></div>
+        <p class="summary" id="summary"></p>
+        <div class="gauge" id="gauge" role="meter" aria-label="Risk score" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="needle"></i></div>
+        <div class="scale"><span>Safe</span><span>Suspicious</span><span>Spam or phishing</span></div>
+      </div>
+      <ul class="rules" id="rules"></ul>
+      <div class="clean" id="clean"></div>
+    </section>
+  </div>
+</div>
+
+<script>
+const MAILS = [
+ {f:"PayPal Support <service@paypa1-secure.com>", s:"URGENT: Your account has been suspended", b:"Dear customer,\n\nWe noticed unusual activity. Your account will be closed within 24 hours unless you verify your password and confirm your details immediately:\n\nhttp://paypal-verify.xyz/login\n\nThank you,\nPayPal Security"},
+ {f:"Lottery Office <claims@mega-win.top>", s:"Congratulations!! You won $1,000,000", b:"WINNER!! You have been selected as our lucky winner of 1000000 dollars. Send your bank details to claim your prize. 100% free, no obligation. Act now!!"},
+ {f:"Delivery Alert <track@parcel-info.net>", s:"Package on hold", b:"Your parcel could not be delivered. Pay the $2 fee to reschedule: https://bit.ly/3xParcel\nOpen the attached form: delivery_form.exe"},
+ {f:"Priya Nair <priya.nair@gmail.com>", s:"Lunch tomorrow?", b:"Hey! Are we still on for lunch tomorrow at 1? I can grab a table near the library. Thanks, see you there."},
+ {f:"Amazon <order-update@amazon.com>", s:"Your order has shipped", b:"Hi Sam,\n\nYour order #114-2088 shipped today and should arrive Thursday. Track it any time at https://www.amazon.com/your-orders.\n\nThanks for shopping with us."},
+ {f:"Team Lead <lead@company.org>", s:"Meeting moved to 3pm", b:"Quick note: the project meeting has been moved to 3pm in room B. Please bring the draft report. Thanks!"}
+];
+
+const BRANDS = {paypal:"paypal.com", amazon:"amazon.com", netflix:"netflix.com", apple:"apple.com", microsoft:"microsoft.com", google:"google.com"};
+const BAD_TLD = /\.(xyz|top|click|tk|ru|info|biz|win|loan|zip)$/i;
+const SHORT = /^(bit\.ly|tinyurl\.com|t\.co|goo\.gl|is\.gd|cutt\.ly)$/i;
+
+const hit = (re, t) => { const m = t.match(re); return m ? m[0] : null; };
+const links = t => (t.match(/(https?:\/\/[^\s<>"]+|www\.[^\s<>"]+)/gi) || [])
+  .map(u => u.replace(/[)\]}>.,;!?]+$/g, ""));
+const hostOf = u => u.replace(/^https?:\/\//i, "").split(/[\/?#:]/)[0].toLowerCase();
+
+const RULES = [
+ {name:"Urgent or threatening language", pts:15, why:"Scammers rush you so you act before thinking.",
+  test:(f,s,b) => hit(/urgent|immediately|act now|within \d+ hours|will be closed|suspended|last chance|arrest/i, s+" "+b)},
+ {name:"Asks for passwords or private details", pts:20, why:"Real companies never ask you to confirm passwords or bank details by email.",
+  test:(f,s,b) => hit(/password|verify your (account|identity|password|payment|billing|details)|confirm your (details|account|identity)|bank details|credit card|social security/i, s+" "+b)},
+ {name:"Money or prize bait", pts:15, why:"Unexpected winnings and cash offers are the classic hook.",
+  test:(f,s,b) => hit(/winner|you won|prize|lottery|free gift|congratulations|claim (your )?(prize|reward|funds)|inheritance/i, s+" "+b)},
+ {name:"Suspicious link", pts:20, why:"Odd domain endings, link shorteners, or raw IP addresses often hide a fake site.",
+  test:(f,s,b) => { for (const u of links(s+" "+b)){ const h = hostOf(u); if (BAD_TLD.test(h) || SHORT.test(h) || /^\d{1,3}(\.\d{1,3}){3}$/.test(h)) return u; } return null; }},
+ {name:"Sender pretends to be a known brand", pts:20, why:"The name says one company, but the real address belongs to someone else or is a lookalike (like a 1 in place of an l).",
+  test:(f) => { const dom = ((f.match(/@([\w.-]+)/) || [])[1] || "").toLowerCase(), norm = dom.replace(/1/g,"l").replace(/0/g,"o").replace(/3/g,"e");
+    for (const [brand, official] of Object.entries(BRANDS)){
+      if (!(f.toLowerCase().includes(brand) || norm.includes(brand))) continue;
+      if (dom !== official && !dom.endsWith("."+official)) return dom || f;
+    } return null; }},
+ {name:"Generic greeting", pts:8, why:"Mass mailings don’t know your name.",
+  test:(f,s,b) => hit(/dear (customer|user|friend|sir|madam|account holder|valued)/i, b)},
+ {name:"Shouting or too many exclamation marks", pts:8, why:"Spam leans on loud formatting to grab attention.",
+  test:(f,s,b) => { const t = s+" "+b, L = t.replace(/[^A-Za-z]/g,""); if ((t.match(/!/g)||[]).length >= 2) return "!!"; if (L.length > 12 && L.replace(/[^A-Z]/g,"").length / L.length > .4) return "ALL CAPS"; return null; }},
+ {name:"Risky attachment", pts:15, why:"Programs and macro files (.exe, .scr, .zip, .docm) are a common way to deliver malware.",
+  test:(f,s,b) => hit(/\b[\w-]+\.(exe|scr|zip|js|bat|docm|xlsm)\b/i, s+" "+b)},
+ {name:"Too good to be true", pts:12, why:"Guarantees and “no risk” offers are almost always scams.",
+  test:(f,s,b) => hit(/no experience|work from home|guaranteed|risk free|double your|100% free|miracle|get rich/i, s+" "+b)},
+ {name:"Personal or routine context", pts:0, why:"This context can be legitimate, but it does not cancel warning signs.",
+  test:(f,s,b) => hit(/see you|thanks|lunch|meeting|tomorrow|library|see you there/i, b)}
+];
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function analyze(f, s, b){
+  const fired = [], passed = [];
+  for (const r of RULES){ const ev = r.test(f, s, b); (ev ? fired : passed).push({r, ev}); }
+  const score = Math.min(100, fired.reduce((total, item) => total + Math.max(0, item.r.pts), 0));
+  const level = score >= 50 ? "bad" : score >= 15 ? "warn" : "good";
+  return {fired, passed, score, level};
+}
+const LABEL = {bad:"High risk", warn:"Review carefully", good:"Low risk"};
+const SUMMARY = {
+  bad:"Several strong scam signals matched. Do not click links, open attachments, or reply until you verify the sender another way.",
+  warn:"One or more warning signs matched. Verify the sender and destination of every link before acting.",
+  good:"No strong warning signs matched this checklist. A low score cannot guarantee that a message is genuine."
+};
+
+function render(){
+  const a = analyze($("from").value, $("subj").value, $("body").value);
+  const empty = !($("from").value + $("subj").value + $("body").value).trim();
+  $("stamp").className = "stamp " + a.level;
+  $("stamp").textContent = empty ? "Nothing to check" : LABEL[a.level];
+  $("score").innerHTML = empty ? "" : `${a.score}<small> / 100 risk</small>`;
+  $("summary").textContent = empty ? "Choose a sample message or paste an email to begin." : SUMMARY[a.level];
+  $("needle").style.left = a.score + "%";
+  $("gauge").setAttribute("aria-valuenow", a.score);
+  $("gauge").setAttribute("aria-label", empty ? "No message analyzed" : `Risk score ${a.score} out of 100`);
+  $("rules").innerHTML = a.fired.map(x => `<li><span class="pts ${x.r.pts === 0 ? "good" : "bad"}">${x.r.pts === 0 ? "INFO" : "+"+x.r.pts}</span><b>${esc(x.r.name)}</b><p>${esc(x.r.why)}</p><code>${esc(String(x.ev).slice(0, 90))}</code></li>`).join("");
+  const riskRules = RULES.filter(r => r.pts > 0);
+  const clearRiskRules = a.passed.filter(x => x.r.pts > 0).length;
+  $("clean").textContent = empty ? "No analysis yet." : `${clearRiskRules} of ${riskRules.length} risk checks found no match.`;
+}
+
+function load(i){
+  const m = i < 0 ? {f:"", s:"", b:""} : MAILS[i];
+  $("from").value = m.f; $("subj").value = m.s; $("body").value = m.b;
+  document.querySelectorAll("#inbox button").forEach((b, k) => b.setAttribute("aria-current", k === i));
+  render();
+}
+
+$("inbox").innerHTML = MAILS.map((m, i) => {
+  const a = analyze(m.f, m.s, m.b);
+  return `<li><button type="button" data-i="${i}"><span class="dot ${a.level}" title="${LABEL[a.level]}"></span><span class="meta"><b>${esc(m.f.replace(/\s*<.*>/, ""))}</b><span>${esc(m.s)}</span></span></button></li>`;
+}).join("");
+$("inbox").addEventListener("click", e => { const b = e.target.closest("button"); if (b) load(+b.dataset.i); });
+$("blank").addEventListener("click", () => { load(-1); $("from").focus(); });
+["from", "subj", "body"].forEach(id => $(id).addEventListener("input", () => {
+  document.querySelectorAll("#inbox button").forEach(b => b.setAttribute("aria-current", "false")); render();
+}));
+load(0);
+</script>
+</body>
+</html>
